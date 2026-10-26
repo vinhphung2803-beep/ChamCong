@@ -32,6 +32,7 @@
 
     .hidden { display: none !important; }
 
+    /* LOGIN */
     #loginPage {
       min-height: 100vh;
       display: grid;
@@ -167,6 +168,7 @@
       line-height: 1.8;
     }
 
+    /* ADMIN */
     #adminPage { min-height: 100vh; }
     .sidebar {
       width: 245px;
@@ -371,6 +373,7 @@
 
     .empty { padding: 38px; text-align: center; color: var(--muted); font-size: 13px; }
 
+    /* MODAL THÊM NHÂN VIÊN */
     .modal-backdrop {
       position: fixed;
       inset: 0;
@@ -458,7 +461,7 @@
       border-color: var(--primary);
       box-shadow: 0 0 0 2px #2563eb18;
     }
-    .employee-form-grid .field input[type="date"] { color: #748198; }
+    .employee-form-grid .field input[type="date"] { color: #748198;     }
     .employee-form-modal .modal-actions { margin-top: 14px; }
     .employee-form-modal .modal-actions button { height: 36px !important; }
 
@@ -511,6 +514,7 @@
 </head>
 
 <body>
+  <!-- LOGIN PAGE -->
   <section id="loginPage">
     <div class="login-banner">
       <div class="brand">
@@ -557,6 +561,7 @@
     </div>
   </section>
 
+  <!-- ADMIN DASHBOARD -->
   <section id="adminPage" class="hidden">
     <aside class="sidebar">
       <div class="brand">
@@ -658,13 +663,14 @@
 
           <div class="table-footer">
             <span id="resultCount">Đang hiển thị 0 nhân viên</span>
-            <span>Dữ liệu kết nối trực tiếp từ Neon Database</span>
+            <span>Dữ liệu lưu tự động trên trình duyệt (LocalStorage)</span>
           </div>
         </section>
       </div>
     </main>
   </section>
 
+  <!-- MODAL THÊM NHÂN VIÊN -->
   <div class="modal-backdrop hidden" id="addEmployeeModal">
     <div class="modal employee-form-modal" role="dialog" aria-modal="true" aria-labelledby="addEmployeeTitle">
       <div class="modal-header">
@@ -781,9 +787,18 @@
   <script>
     const DEMO_USERNAME = "admin";
     const DEMO_PASSWORD = "admin123";
-    const API_URL = "https://ep-silent-dew-b5y292jp.apirest.c-7.us-east-2.aws.neon.tech/neondb/rest/v1";
 
-    let employees = [];
+    // Khởi tạo dữ liệu mẫu hoặc lấy từ LocalStorage
+    const defaultEmployees = [
+      { code: "NV001", name: "Nguyễn Minh Anh", salary: 30000, active: true },
+      { code: "NV002", name: "Trần Hoàng Nam", salary: 35000, active: true },
+      { code: "NV003", name: "Lê Thu Hà", salary: 28000, active: true },
+      { code: "NV004", name: "Phạm Đức Long", salary: 32000, active: false },
+      { code: "NV005", name: "Đỗ Ngọc Linh", salary: 30000, active: true },
+      { code: "NV006", name: "Vũ Quang Huy", salary: 40000, active: false }
+    ];
+
+    let employees = JSON.parse(localStorage.getItem("attendqr_employees")) || defaultEmployees;
 
     const $ = (id) => document.getElementById(id);
 
@@ -803,27 +818,14 @@
         $("loginError").textContent = "";
         $("loginPage").classList.add("hidden");
         $("adminPage").classList.remove("hidden");
-        fetchEmployees();
+        renderEmployees();
       } else {
         $("loginError").textContent = "Tên đăng nhập hoặc mật khẩu không chính xác.";
       }
     });
 
-    async function fetchEmployees() {
-      try {
-        const response = await fetch(`${API_URL}/nhan_vien`);
-        if (response.ok) {
-          const data = await response.json();
-          employees = data.map(item => ({
-            code: item.code,
-            name: item.name,
-            salary: Number(item.salary),
-            active: item.active
-          }));
-        }
-      } catch (error) {
-        console.error(error);
-      }
+    function saveAndRender() {
+      localStorage.setItem("attendqr_employees", JSON.stringify(employees));
       renderEmployees();
     }
 
@@ -891,6 +893,7 @@
     $("searchInput").addEventListener("input", renderEmployees);
     $("statusFilter").addEventListener("change", renderEmployees);
 
+    // Modal điều khiển thêm nhân viên
     $("openAddModalBtn").addEventListener("click", () => {
       $("addEmployeeModal").classList.remove("hidden");
       $("newName").focus();
@@ -912,17 +915,13 @@
       }
     });
 
-    $("addEmployeeForm").addEventListener("submit", async (e) => {
+    $("addEmployeeForm").addEventListener("submit", (e) => {
       e.preventDefault();
       const code = $("newCode").value.trim();
       const name = $("newName").value.trim();
       const salary = Number($("newSalary").value);
       const active = $("newStatus").value === "true";
-      const employeeData = {
-        code,
-        name,
-        salary,
-        active,
+      const employeeDetails = {
         gender: $("newGender").value,
         birthDate: $("newBirthDate").value,
         email: $("newEmail").value.trim(),
@@ -933,31 +932,17 @@
         startDate: $("newStartDate").value
       };
 
+      // Kiểm tra trùng mã nhân viên
       if (employees.some(emp => emp.code.toLowerCase() === code.toLowerCase())) {
         showToast("Mã nhân viên này đã tồn tại!");
         return;
       }
 
-      try {
-        const response = await fetch(`${API_URL}/nhan_vien`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(employeeData)
-        });
-
-        if (response.ok) {
-          employees.unshift(employeeData);
-          renderEmployees();
-          closeAddEmployeeModal();
-          showToast(`Đã thêm nhân viên ${name} thành công!`);
-        } else {
-          showToast("Có lỗi xảy ra khi lưu vào database.");
-        }
-      } catch (error) {
-        showToast("Lỗi kết nối API.");
-      }
+      employees.unshift({ code, name, salary, active, ...employeeDetails });
+      saveAndRender();
+      
+      closeAddEmployeeModal();
+      showToast(`Đã thêm nhân viên ${name} thành công!`);
     });
 
     function showToast(message) {
@@ -973,7 +958,7 @@
     });
 
     $("attendanceNav").addEventListener("click", () => {
-      showToast("Mục chấm công sẽ được kết nối ở bước tiếp theo.");
+  window.location.href = "attendance.html";
     });
 
     $("payrollNav").addEventListener("click", () => {
