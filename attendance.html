@@ -544,8 +544,8 @@
     </header>
 
     <div class="notice">
-      <strong>Lưu ý:</strong> phiên bản này lưu dữ liệu trong trình duyệt
-      bằng localStorage. Dữ liệu chưa được đồng bộ lên Neon.
+      <strong>Lưu ý:</strong> danh sách nhân viên được tải từ backend AttendQR.
+      Bản ghi chấm công hiện vẫn được lưu trong trình duyệt (localStorage), chưa đồng bộ lên Neon.
     </div>
 
     <section class="stats">
@@ -688,10 +688,12 @@
   <div class="toast" id="toast" role="status"></div>
 
   <script>
+    const API_BASE_URL = 'https://my-api-1-omxb.onrender.com/api';
+    const EMPLOYEE_API_URL = `${API_BASE_URL}/employees`;
     const EMPLOYEE_KEY = 'attendqr_employees';
     const ATTENDANCE_KEY = 'attendqr_attendance_demo';
 
-    // Dữ liệu mẫu chỉ dùng khi chưa có danh sách nhân viên được lưu.
+    // Dữ liệu mẫu chỉ dùng khi API chưa truy cập được và chưa có dữ liệu đã lưu.
     const demoEmployees = [
       { code: 'NV001', name: 'Nguyễn Văn An', active: true },
       { code: 'NV002', name: 'Trần Thị Mai', active: true },
@@ -737,12 +739,16 @@
         if (Array.isArray(saved) && saved.length > 0) {
           return saved.map(e => ({
             code: String(
-              e.code ?? e.employee_code ?? e.maNV ?? ''
+              e.code ?? e.employeeCode ?? e.employee_code ?? e.maNV ?? ''
             ).trim(),
             name: String(
-              e.name ?? e.full_name ?? e.hoTen ?? ''
+              e.name ?? e.fullName ?? e.full_name ?? e.hoTen ?? ''
             ).trim(),
-            active: e.active !== false && e.is_active !== false
+            active: e.active !== false
+              && e.is_active !== false
+              && !['đã nghỉ việc', 'ngừng hoạt động', 'inactive'].includes(
+                String(e.status ?? '').trim().toLowerCase()
+              )
           }));
         }
       } catch (error) {
@@ -750,6 +756,38 @@
       }
 
       return demoEmployees;
+    }
+
+    async function loadEmployeesFromAPI() {
+      try {
+        const response = await fetch(EMPLOYEE_API_URL, {
+          method: 'GET',
+          headers: { 'Accept': 'application/json' }
+        });
+
+        if (!response.ok) {
+          throw new Error(`API nhân viên trả về HTTP ${response.status}`);
+        }
+
+        const data = await response.json();
+        if (!Array.isArray(data)) {
+          throw new Error('Dữ liệu API nhân viên không đúng định dạng mảng.');
+        }
+
+        const employees = data.map(e => ({
+          code: String(e.employeeCode ?? e.code ?? '').trim(),
+          name: String(e.fullName ?? e.name ?? '').trim(),
+          active: !['đã nghỉ việc', 'ngừng hoạt động', 'inactive'].includes(
+            String(e.status ?? '').trim().toLowerCase()
+          )
+        })).filter(e => e.code && e.name);
+
+        localStorage.setItem(EMPLOYEE_KEY, JSON.stringify(employees));
+        return employees;
+      } catch (error) {
+        console.error('Không tải được nhân viên từ backend:', error);
+        return getEmployees();
+      }
     }
 
     function getAllAttendance() {
@@ -997,7 +1035,8 @@
 
     $('attendanceDate').value = today();
 
-    render();
+    // Tải danh sách nhân viên từ Render trước khi hiển thị trang.
+    loadEmployeesFromAPI().then(() => render());
   </script>
 </body>
 </html>
